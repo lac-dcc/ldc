@@ -1,6 +1,7 @@
 // Tests debug info generation for nested functions
 // REQUIRES: atleast_llvm308
 // RUN: %ldc -g -c -output-ll -of=%t.ll %s && FileCheck %s < %t.ll
+// RUN: %ldc -g -c -O3 -output-ll -of=%t.O3.ll %s
 
 // CHECK: define {{.*}} @{{.*}}encloser
 // CHECK-SAME: !dbg
@@ -19,6 +20,17 @@ void encloser(int arg0, int arg1)
         // function parameters this triggers off an assert in LLVM >=3.8 (see Github PR #1598)
     }
 }
+
+// See Github PR #1598. This code used to result in an ICE with `-g -O3`.
+void pr1598(string fmt)
+{
+    size_t fmtIdx;
+    void nested()
+    {
+        auto a = fmt[fmtIdx .. $];
+    }
+}
+
 
 // CHECK-LABEL: !DISubprogram(name:{{.*}}"{{.*}}encloser.nested"
 // CHECK: !DILocalVariable{{.*}}nes_i

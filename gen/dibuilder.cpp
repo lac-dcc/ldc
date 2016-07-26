@@ -850,12 +850,8 @@ void ldc::DIBuilder::EmitValue(llvm::Value *val, VarDeclaration *vd) {
 void ldc::DIBuilder::EmitLocalVariable(llvm::Value *ll, VarDeclaration *vd,
                                        Type *type, bool isThisPtr,
                                        bool fromNested,
-#if LDC_LLVM_VER >= 306
-                                       llvm::ArrayRef<int64_t> addr
-#else
-                                       llvm::ArrayRef<llvm::Value *> addr
-#endif
-                                       ) {
+                                       llvm::ArrayRef<AddressOperation> addr,
+                                       unsigned extraFlags) {
   if (!global.params.symdebug)
     return;
 
@@ -891,6 +887,7 @@ void ldc::DIBuilder::EmitLocalVariable(llvm::Value *ll, VarDeclaration *vd,
   ldc::DILocalVariable debugVariable;
   unsigned Flags =
       !isThisPtr ? 0 : DIFlags::FlagArtificial | DIFlags::FlagObjectPointer;
+  Flags |= extraFlags;
 
 #if LDC_LLVM_VER < 306
   if (addr.empty()) {

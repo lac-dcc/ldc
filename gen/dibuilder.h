@@ -54,6 +54,7 @@ typedef llvm::DIScope *DIScope;
 typedef llvm::DISubroutineType *DISubroutineType;
 typedef llvm::DISubprogram *DISubprogram;
 typedef llvm::DICompileUnit *DICompileUnit;
+using DIFlags = llvm::DINode;
 #else
 typedef llvm::DIType DIType;
 typedef llvm::DIFile DIFile;
@@ -67,6 +68,7 @@ typedef llvm::DICompileUnit DICompileUnit;
 #if LDC_LLVM_VER == 306
 typedef llvm::DIExpression DIExpression;
 #endif
+using DIFlags = llvm::DIDescriptor;
 #endif
 
 class DIBuilder {
@@ -134,6 +136,12 @@ public:
 
   void EmitValue(llvm::Value *val, VarDeclaration *vd);
 
+#if LDC_LLVM_VER >= 306
+  using AddressOperation = int64_t;
+#else
+  using AddressOperation = llvm::Value *;
+#endif
+
   /// \brief Emits all things necessary for making debug info for a local
   /// variable vd.
   /// \param ll       LLVM Value of the variable.
@@ -142,16 +150,13 @@ public:
   /// \param isThisPtr Parameter is hidden this pointer
   /// \param fromNested Is a closure variable accessed through nest_arg
   /// \param addr     An array of complex address operations.
-  void
-  EmitLocalVariable(llvm::Value *ll, VarDeclaration *vd, Type *type = nullptr,
-                    bool isThisPtr = false, bool fromNested = false,
-#if LDC_LLVM_VER >= 306
-                    llvm::ArrayRef<int64_t> addr = llvm::ArrayRef<int64_t>()
-#else
-                    llvm::ArrayRef<llvm::Value *> addr =
-                        llvm::ArrayRef<llvm::Value *>()
-#endif
-                        );
+  /// \param extraFlags  Extra flags to add to the DILocalVariable.
+  void EmitLocalVariable(llvm::Value *ll, VarDeclaration *vd,
+                         Type *type = nullptr, bool isThisPtr = false,
+                         bool fromNested = false,
+                         llvm::ArrayRef<AddressOperation> addr =
+                             llvm::ArrayRef<AddressOperation>(),
+                         unsigned extraFlags = 0);
 
   /// \brief Emits all things necessary for making debug info for a global
   /// variable vd.
