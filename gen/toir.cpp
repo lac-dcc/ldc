@@ -267,6 +267,7 @@ public:
 
     auto &PGO = gIR->funcGen().pgo;
     PGO.setCurrentStmt(e);
+    gIR->DBuilder.EmitStopPoint(e->loc);
 
     result = DtoDeclarationExp(e->declaration);
 
@@ -438,6 +439,8 @@ public:
       ArrayLengthExp *ale = static_cast<ArrayLengthExp *>(e->e1);
       DLValue arrval(ale->e1->type, DtoLVal(ale->e1));
       DValue *newlen = toElem(e->e2);
+
+      gIR->DBuilder.EmitStopPoint(e->loc);
       DSliceValue *slice =
           DtoResizeDynArray(e->loc, arrval.type, &arrval, DtoRVal(newlen));
       DtoStore(DtoRVal(slice), DtoLVal(&arrval));
@@ -462,11 +465,13 @@ public:
         DSpecialRefValue *lhs = toElem(e->e1)->isSpecialRef();
         assert(lhs);
         DValue *rhs = toElem(e->e2);
-
         // We shouldn't really need makeLValue() here, but the 2.063
         // frontend generates ref variables initialized from function
         // calls.
-        DtoStore(makeLValue(e->loc, rhs), lhs->getRefStorage());
+        auto rhs_lval = makeLValue(e->e2->loc, rhs);
+
+        gIR->DBuilder.EmitStopPoint(e->loc);
+        DtoStore(rhs_lval, lhs->getRefStorage());
 
         result = lhs;
         return;
@@ -528,7 +533,10 @@ public:
         return;
     }
 
-    DValue *r = toElem(e->e2);
+    // Explicitly load R-value to get correct debug location on the load
+    DValue *r = toElem(e->e2)->getRVal();
+
+    gIR->DBuilder.EmitStopPoint(e->loc);
 
     if (e->e1->type->toBasetype()->ty == Tstruct && e->e2->op == TOKint64) {
       Logger::println("performing aggregate zero initialization");
@@ -584,6 +592,8 @@ public:
                                                                                \
     auto &PGO = gIR->funcGen().pgo;                                            \
     PGO.setCurrentStmt(e);                                                     \
+                                                                               \
+    gIR->DBuilder.EmitStopPoint(e->loc);                                       \
                                                                                \
     result = Func(e->loc, e->type, toElem(e->e1), e->e2);                      \
   }
@@ -680,6 +690,7 @@ public:
 
     auto &PGO = gIR->funcGen().pgo;
     PGO.setCurrentStmt(e);
+    gIR->DBuilder.EmitStopPoint(e->loc);
 
     // handle magic inline asm
     if (e->e1->op == TOKvar) {
@@ -785,6 +796,7 @@ public:
 
     auto &PGO = gIR->funcGen().pgo;
     PGO.setCurrentStmt(e);
+    gIR->DBuilder.EmitStopPoint(e->loc);
 
     // get the value to cast
     DValue *u = toElem(e->e1);
@@ -817,6 +829,8 @@ public:
 
     auto &PGO = gIR->funcGen().pgo;
     PGO.setCurrentStmt(e);
+
+    gIR->DBuilder.EmitStopPoint(e->loc);
 
     DValue *base = DtoSymbolAddress(e->loc, e->var->type, e->var);
 
@@ -871,6 +885,8 @@ public:
     auto &PGO = gIR->funcGen().pgo;
     PGO.setCurrentStmt(e);
 
+    gIR->DBuilder.EmitStopPoint(e->loc);
+
     // The address of a StructLiteralExp can in fact be a global variable, check
     // for that instead of re-codegening the literal.
     if (e->e1->op == TOKstructliteral) {
@@ -924,10 +940,13 @@ public:
     auto &PGO = gIR->funcGen().pgo;
     PGO.setCurrentStmt(e);
 
+    DValue *dv = toElem(e->e1);
+
+    LLValue *llVal = DtoRVal(dv);
+    gIR->DBuilder.EmitStopPoint(e->loc);
+
     // function pointers are special
     if (e->type->toBasetype()->ty == Tfunction) {
-      DValue *dv = toElem(e->e1);
-      LLValue *llVal = DtoRVal(dv);
       if (DFuncValue *dfv = dv->isFunc()) {
         result = new DFuncValue(e->type, dfv->func, llVal);
       } else {
@@ -936,10 +955,7 @@ public:
       return;
     }
 
-    // get the rvalue and return it as an lvalue
-    LLValue *V = DtoRVal(e->e1);
-
-    result = new DLValue(e->type, DtoBitCast(V, DtoPtrToType(e->type)));
+    result = new DLValue(e->type, DtoBitCast(llVal, DtoPtrToType(e->type)));
   }
 
   //////////////////////////////////////////////////////////////////////////////
@@ -1327,8 +1343,8 @@ public:
     auto &PGO = gIR->funcGen().pgo;
     PGO.setCurrentStmt(e);
 
-    DValue *l = toElem(e->e1);
-    DValue *r = toElem(e->e2);
+    DValue *l = toElem(e->e1)->getRVal();
+    DValue *r = toElem(e->e2)->getRVal();
 
     Type *t = e->e1->type->toBasetype();
 

@@ -15,8 +15,7 @@ bool FuzzMe(ubyte* data, size_t dataSize)
            data[2] == 'Z' &&
     // CHECK: stack-buffer-overflow
     // CHECK-NEXT: READ of size 1
-    // CHECK-NEXT: #0 {{.*}} in {{.*fuzz_asan6FuzzMe.*}} {{.*}}fuzz_asan.d:
-    // FIXME, debug line info is wrong (Github issue #2090). Once fixed, add [[@LINE+1]]
+    // CHECK-NEXT: #0 {{.*}} in {{.*fuzz_asan6FuzzMe.*}} {{.*}}fuzz_asan.d:[[@LINE+1]]
            data[dataSize] == 'Z'; // :‑<
 }
 

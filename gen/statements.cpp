@@ -83,9 +83,6 @@ public:
     auto &PGO = irs->funcGen().pgo;
     PGO.setCurrentStmt(stmt);
 
-    // emit dwarf stop point
-    irs->DBuilder.EmitStopPoint(stmt->loc);
-
     emitCoverageLinecountInc(stmt->loc);
 
     // The LLVM value to return, or null for void returns.
@@ -217,6 +214,8 @@ public:
 
     // If we need to emit the actual return instruction, do so.
     if (!useRetValSlot || !sharedRetBlockExists) {
+      // emit dwarf stop point at the location of the "return" keyword
+      irs->DBuilder.EmitStopPoint(stmt->loc);
       if (returnValue) {
         // Hack: the frontend generates 'return 0;' as last statement of
         // 'void main()'. But the debug location is missing. Use the end
@@ -898,6 +897,7 @@ public:
     irs->scope() = IRScope(oldbb);
     if (useSwitchInst) {
       // The case index value.
+      irs->DBuilder.EmitStopPoint(stmt->condition->loc);
       LLValue *condVal = DtoRVal(toElemDtor(stmt->condition));
 
       // Create switch and add the cases.
@@ -958,6 +958,7 @@ public:
       // We can't use switch, so we will use a bunch of br instructions
       // instead.
 
+      irs->DBuilder.EmitStopPoint(stmt->condition->loc);
       DValue *cond = toElemDtor(stmt->condition);
       LLValue *condVal = DtoRVal(cond);
 
@@ -977,12 +978,14 @@ public:
       irs->scope() = IRScope(nextbb);
       auto failedCompareCount = incomingPGORegionCount;
       for (size_t i = 0; i < caseCount; ++i) {
+        const auto cs = (*cases)[i];
+        irs->DBuilder.EmitStopPoint(cs->loc);
+
         LLValue *cmp = irs->ir->CreateICmp(llvm::ICmpInst::ICMP_EQ, indices[i],
                                            condVal, "checkcase");
         nextbb = irs->insertBBBefore(endbb, "checkcase");
 
         // Add case counters for PGO in front of case body
-        const auto cs = (*cases)[i];
         auto casejumptargetbb = funcGen.switchTargets.get(cs);
         if (PGO.emitsInstrumentation()) {
           llvm::BasicBlock *casecntr =
