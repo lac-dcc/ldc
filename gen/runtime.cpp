@@ -349,6 +349,7 @@ llvm::Function *getRuntimeFunction(const Loc &loc, llvm::Module &target,
                                      .getCallee()
 #endif
       );
+
   resfn->setAttributes(fn->getAttributes());
   resfn->setCallingConv(fn->getCallingConv());
   return resfn;

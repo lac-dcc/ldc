@@ -91,7 +91,6 @@ endif()
 #
 include(GetLinuxDistribution)
 
-
 #
 # Main configuration.
 #
@@ -360,6 +359,8 @@ file(GLOB_RECURSE DRV_SRC_D driver/*.d)
 file(GLOB_RECURSE IR_SRC_D ir/*.d)
 file(GLOB IR_SRC ir/*.cpp)
 file(GLOB IR_HDR ir/*.h)
+file(GLOB MLIR_HDR gen/MLIR/*.h)
+file(GLOB MLIR_SRC gen/MLIR/*.cpp)
 set(DRV_SRC
     driver/args.cpp
     driver/cache.cpp
@@ -373,6 +374,7 @@ set(DRV_SRC
     driver/exe_path.cpp
     driver/targetmachine.cpp
     driver/toobj.cpp
+    driver/tomlirfile.cpp
     driver/tool.cpp
     driver/archiver.cpp
     driver/linker.cpp
@@ -399,6 +401,7 @@ set(DRV_HDR
     driver/linker.h
     driver/plugins.h
     driver/targetmachine.h
+    driver/tomlirfile.h
     driver/toobj.h
     driver/tool.h
 )
@@ -410,6 +413,8 @@ set(LDC_CXX_SOURCE_FILES
     ${FE_HDR}
     ${GEN_SRC}
     ${GEN_HDR}
+    ${MLIR_HDR}
+    ${MLIR_SRC}
     ${IR_SRC}
     ${IR_HDR}
 )
@@ -423,6 +428,8 @@ set(LDC_D_SOURCE_FILES
 source_group("Source Files\\dmd" FILES ${FE_SRC_D})
 source_group("Header Files\\dmd" FILES ${FE_HDR})
 source_group("Source Files\\gen" FILES ${GEN_SRC} ${GEN_SRC_D})
+source_group("Header Files\\gen\\MLIR" FILES ${MLIR_HDR})
+source_group("Source Files\\gen\\MLIR" FILES ${MLIR_SRC})
 source_group("Header Files\\gen" FILES ${GEN_HDR})
 source_group("Source Files\\ir" FILES ${IR_SRC} ${IR_SRC_D})
 source_group("Header Files\\ir" FILES ${IR_HDR})
@@ -448,6 +455,33 @@ if(LDC_DYNAMIC_COMPILE STREQUAL "AUTO")
     endif()
 endif()
 message(STATUS "Building LDC with dynamic compilation support: ${LDC_DYNAMIC_COMPILE} (LDC_DYNAMIC_COMPILE=${LDC_DYNAMIC_COMPILE})")
+
+#
+# Setting MLIR headers
+#
+
+find_package(MLIR REQUIRED)
+if(MLIR_FOUND)
+    message(STATUS "Buiding with MLIR support")
+    include_directories(${MLIR_INCLUDE_DIRS})
+    include_directories(${MLIR_BUILD_INCLUDE_DIRS})
+    include_directories(${MLIR_LIB_DIRS})
+    add_definitions("-DLDC_MLIR_ENABLED")
+if(MSVC)
+    if(EXISTS "${LLVM_LIBRARY_DIRS}/libMLIR*.lib")
+        set(LLVM_LIBRARIES "${LLVM_LIBRARY_DIRS}/libMLIR*.lib" ${LLVM_LIBRARIES})
+    endif()
+else()
+    if(EXISTS "${LLVM_LIBRARY_DIRS}/libMLIRIR.a")
+        set(LLVM_LIBRARIES "${LLVM_LIBRARY_DIRS}/libMLIR*.a"  ${LLVM_LIBRARIES})
+    elseif(EXISTS "${LLVM_LIBRARY_DIRS}/libMLIRIR.so")
+        set(LLVM_LIBRARIES "${LLVM_LIBRARY_DIRS}/libMLIR*.so"  ${LLVM_LIBRARIES})
+    elseif(EXISTS "${LLVM_LIBRARY_DIRS}/libMLIRIR.dylib")
+        set(LLVM_LIBRARIES "${LLVM_LIBRARY_DIRS}/libMLIR*.dylib"  ${LLVM_LIBRARIES})
+    endif()
+endif() #if MSVC
+endif() #if MLIR_FOUND
+
 
 #
 # Includes, defines.
@@ -675,7 +709,9 @@ if (HAVE_SC_ARG_MAX)
    append("-DHAVE_SC_ARG_MAX" CMAKE_CXX_FLAGS)
 endif()
 
-set_source_files_properties(driver/args.cpp driver/exe_path.cpp driver/ldmd.cpp driver/response.cpp PROPERTIES
+set_source_files_properties( driver/args.cpp driver/exe_path.cpp driver/ldmd.cpp driver/response
+        .cpp
+        PROPERTIES
     COMPILE_FLAGS "${LLVM_CXXFLAGS} ${LDC_CXXFLAGS}"
     COMPILE_DEFINITIONS LDC_EXE_NAME="${LDC_EXE_NAME}"
 )

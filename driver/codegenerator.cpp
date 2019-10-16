@@ -18,6 +18,7 @@
 #include "driver/cl_options_instrumentation.h"
 #include "driver/linker.h"
 #include "driver/toobj.h"
+#include "driver/tomlirfile.h"
 #include "gen/dynamiccompile.h"
 #include "gen/logger.h"
 #include "gen/modules.h"
@@ -34,6 +35,12 @@
 namespace llvm {
   using ToolOutputFile = tool_output_file;
 }
+#endif
+
+#if LDC_LLVM_VER >= 1000
+using std::make_unique;
+#else
+using llvm::make_unique;
 #endif
 
 namespace {
@@ -69,7 +76,7 @@ createAndSetDiagnosticsOutputFile(IRState &irs, llvm::LLVMContext &ctx,
     diagnosticsOutputFile = std::move(*remarksFileOrError);
 #else
     std::error_code EC;
-    diagnosticsOutputFile = llvm::make_unique<llvm::ToolOutputFile>(
+    diagnosticsOutputFile = make_unique<llvm::ToolOutputFile>(
         diagnosticsFilename, EC, llvm::sys::fs::F_None);
     if (EC) {
       irs.dmodule->error("Could not create file %s: %s",
@@ -77,10 +84,14 @@ createAndSetDiagnosticsOutputFile(IRState &irs, llvm::LLVMContext &ctx,
       fatal();
     }
 
+    //FIXME: this has been replaced by setDiagnosticHandler
+#if LDC_LLVM_VER < 1000
     ctx.setDiagnosticsOutputFile(
+
         llvm::make_unique<llvm::yaml::Output>(diagnosticsOutputFile->os()));
 
     if (withHotness) {
+
 #if LDC_LLVM_VER >= 500
       ctx.setDiagnosticsHotnessRequested(true);
 #else
@@ -187,8 +198,10 @@ void emitLLVMUsedArray(IRState &irs) {
 }
 
 namespace ldc {
-CodeGenerator::CodeGenerator(llvm::LLVMContext &context, bool singleObj)
-    : context_(context), moduleCount_(0), singleObj_(singleObj), ir_(nullptr) {
+CodeGenerator::CodeGenerator(llvm::LLVMContext &context,
+    mlir::MLIRContext &mlirContext, bool singleObj)
+    : context_(context), moduleCount_(0), singleObj_(singleObj), ir_(nullptr),
+    mlirContext_(mlirContext){
   // Set the context to discard value names when not generating textual IR.
   if (!global.params.output_ll) {
     context_.setDiscardValueNames(true);
@@ -243,6 +256,7 @@ void CodeGenerator::finishLLModule(Module *m) {
     insertBitcodeFiles(ir_->module, ir_->context(), global.params.bitcodeFiles);
   }
 
+  writeMLIRModule(m, mlirContext_, m->objfile.toChars(), ir_);
   writeAndFreeLLModule(m->objfile.toChars());
 }
 
